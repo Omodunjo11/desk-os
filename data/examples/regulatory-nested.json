@@ -1,0 +1,25 @@
+{
+  "resourceId": "ISS-10442",
+  "OPSS-Iss:Name": "CFPB circular — AI adverse-action notices",
+  "OPSS-Iss:Citation": "CFPB 2026-04 §4.2(b)",
+  "OPSS-Iss:Description": "Auto-decision templates in lending do not name model version or top factors.",
+  "OPSS-Iss:Recommendation": "Open an obligation on the lending template. Legal review in 48 hours.",
+  "OPSS-Iss:OpenQuestion": "Commercial scoring may be out of scope.",
+  "OPSS-Iss:Owner": "Unassigned",
+  "OPSS-Iss:DueDate": "48 hours (legal)",
+  "OPSS-Iss:Severity": "Critical",
+  "OPSS-Iss:EvidenceStatus": "Stale",
+  "OPSS-Iss:Status": "New",
+  "businessEntity": "Consumer lending",
+  "system": "IBM OpenPages",
+  "scopeConfidence": 82,
+  "daysToDue": 2,
+  "parentControl": "C-AA-12",
+  "lastTested": "2025-11-12",
+  "createdOn": "2026-08-14T13:00:00Z",
+  "relatedControls": [
+    { "id": "C-AA-12", "lastTested": "2025-11-12", "status": "Stale" },
+    { "id": "C-AA-09", "lastTested": "2026-01-04", "status": "Current" }
+  ],
+  "assets": [{ "name": "AA-AUTO-001", "customersAffected": 18400 }]
+}

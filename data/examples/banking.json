@@ -1,0 +1,53 @@
+[
+  {
+    "hold_id": "W-88341",
+    "hold_reason": "OFAC_NEAR_MATCH",
+    "party_name": "Northbridge Logistics",
+    "reason_detail": "Name similarity 0.81 against an SDN alias. Wire cutoff in 3 hours.",
+    "next_step": "Compare full legal name and address. Do not auto-release.",
+    "open_questions": "Screening engine does not see the DBA on the invoice.",
+    "product_code": "WIRE",
+    "amount_usd": 482000,
+    "cutoff_hours": 3,
+    "segment": "Commercial",
+    "source_system": "Payments hub",
+    "queue": "OFAC review",
+    "screening_score": 46,
+    "relationship_summary": "11-year commercial relationship, 14 prior wires to this beneficiary, never held",
+    "posted_at": "2026-08-14T15:10:00Z"
+  },
+  {
+    "hold_id": "K-1022",
+    "hold_reason": "KYC_REFRESH_OVERDUE",
+    "party_name": "Helios Foods",
+    "reason_detail": "Periodic refresh due 11 days ago. Credit line is live.",
+    "next_step": "Freeze new originations only. Keep existing draws.",
+    "open_questions": "Ownership may have changed after a 2025 recap.",
+    "product_code": "CREDIT",
+    "amount_usd": 12400000,
+    "cutoff_hours": 120,
+    "segment": "Commercial",
+    "source_system": "KYC warehouse",
+    "queue": "Periodic refresh",
+    "screening_score": 90,
+    "relationship_summary": "Outstanding 8.1M of 12.4M. Last CIP packet 2023-06",
+    "posted_at": "2026-08-14T00:00:00Z"
+  },
+  {
+    "hold_id": "P-4410",
+    "hold_reason": "NSF_PAYROLL",
+    "party_name": "River Clinic",
+    "reason_detail": "Collected balance 41k short of payroll ACH. 214 employees.",
+    "next_step": "Call the office manager. Offer same-day wire path.",
+    "open_questions": "Could be a delayed insurance receivable.",
+    "product_code": "ACH",
+    "amount_usd": 486000,
+    "cutoff_hours": 1,
+    "segment": "Commercial",
+    "source_system": "Core",
+    "queue": "ACH exceptions",
+    "screening_score": 92,
+    "relationship_summary": "Prior miss Dec 2025, recovered same day",
+    "posted_at": "2026-08-14T15:40:00Z"
+  }
+]

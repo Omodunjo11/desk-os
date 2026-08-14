@@ -1,0 +1,214 @@
+import type { DispositionKey } from "../types";
+
+export type GoldCase = {
+  id: string;
+  adapterId: string;
+  raw: Record<string, unknown>;
+  expectIngestError?: boolean;
+  expect?: {
+    disposition: DispositionKey;
+    titleIncludes?: string;
+    evidenceLabel?: string;
+    minCoverage?: number;
+    hasNestedEvidence?: boolean;
+    conflict?: boolean;
+  };
+};
+
+export const GOLD: GoldCase[] = [
+  {
+    id: "fraud-elder-need-more",
+    adapterId: "tm-alerts",
+    raw: {
+      alertId: "A-77821",
+      alertType: "ELDER_EXPLOITATION",
+      policyName: "Elder account — new bill-pay payees",
+      focalParty: "Helen Ward, 78",
+      narrative:
+        "Three new utility-like payees in 6 days, all LLCs registered this month. Caregiver on file.",
+      analystNextStep: "Call the trusted contact, not the number that initiated the payments.",
+      openQuestion: "Could be a real caregiver taking over bills. Could be exploitation.",
+      txnAmountUsd: 14200,
+      alertAgeHours: 5,
+      channel: "Bill pay",
+      ruleId: "New payee + age",
+      riskScore: 90,
+      modelConfidence: 44,
+      velocityScore: 80,
+      vulnerabilityScore: 95,
+      partyProfile: "Age 78, POA on file 2024",
+      priorDispositionSummary: "No prior alerts on this CIF",
+      relatedTxns: [
+        { when: "2026-08-09", amount: 4200, payee: "Harbor Utilities LLC" },
+        { when: "2026-08-11", amount: 5100, payee: "Gridline Energy LLC" },
+      ],
+    },
+    expect: {
+      disposition: "monitor",
+      titleIncludes: "Elder",
+      evidenceLabel: "relatedTxns",
+      minCoverage: 0.9,
+      hasNestedEvidence: true,
+    },
+  },
+  {
+    id: "fraud-false-positive-clear",
+    adapterId: "tm-alerts",
+    raw: {
+      alertId: "A-76001",
+      alertType: "MULE_PASSTHROUGH",
+      policyName: "Repeat merchant, similar legal name",
+      focalParty: "Acme Lighting LLC vs Acme Lighting Inc",
+      narrative: "Fuzzy vendor match 0.79. Same ABA paid monthly for 4 years.",
+      analystNextStep: "Clear and add as a known-legitimate pair.",
+      openQuestion: "Almost none unless the Inc entity is new. It is not.",
+      txnAmountUsd: 11840,
+      alertAgeHours: 2,
+      channel: "AP",
+      ruleId: "Fuzzy vendor",
+      riskScore: 25,
+      modelConfidence: 20,
+      velocityScore: 10,
+      vulnerabilityScore: 15,
+      partyProfile: "Corporate AP vendor",
+      priorDispositionSummary: "Cleared 6 times in 2025",
+    },
+    expect: {
+      disposition: "dismiss",
+      titleIncludes: "merchant",
+      minCoverage: 0.9,
+    },
+  },
+  {
+    id: "openpages-nested-cfpb",
+    adapterId: "openpages",
+    raw: {
+      resourceId: "ISS-10442",
+      "OPSS-Iss:Name": "CFPB circular — AI adverse-action notices",
+      "OPSS-Iss:Citation": "CFPB 2026-04 §4.2(b)",
+      "OPSS-Iss:Description":
+        "Auto-decision templates in lending do not name model version or top factors.",
+      "OPSS-Iss:Recommendation": "Open an obligation on the lending template. Legal review in 48 hours.",
+      "OPSS-Iss:OpenQuestion": "Commercial scoring may be out of scope.",
+      "OPSS-Iss:Owner": "Unassigned",
+      "OPSS-Iss:DueDate": "48 hours (legal)",
+      "OPSS-Iss:Severity": "Critical",
+      "OPSS-Iss:EvidenceStatus": "Stale",
+      "OPSS-Iss:Status": "New",
+      businessEntity: "Consumer lending",
+      system: "IBM OpenPages",
+      scopeConfidence: 82,
+      daysToDue: 2,
+      parentControl: "C-AA-12",
+      lastTested: "2025-11-12",
+      createdOn: "2026-08-14T13:00:00Z",
+      relatedControls: [
+        { id: "C-AA-12", lastTested: "2025-11-12", status: "Stale" },
+        { id: "C-AA-09", lastTested: "2026-01-04", status: "Current" },
+      ],
+      assets: [{ name: "AA-AUTO-001", customersAffected: 18400 }],
+    },
+    expect: {
+      disposition: "act",
+      titleIncludes: "adverse-action",
+      evidenceLabel: "relatedControls",
+      minCoverage: 0.85,
+      hasNestedEvidence: true,
+    },
+  },
+  {
+    id: "banking-ofac-need-more",
+    adapterId: "core-banking",
+    raw: {
+      hold_id: "W-88341",
+      hold_reason: "OFAC_NEAR_MATCH",
+      party_name: "Northbridge Logistics",
+      reason_detail: "Name similarity 0.81 against an SDN alias. Wire cutoff in 3 hours.",
+      next_step: "Compare full legal name and address. Do not auto-release.",
+      open_questions: "Screening engine does not see the DBA on the invoice.",
+      product_code: "WIRE",
+      amount_usd: 482000,
+      cutoff_hours: 3,
+      segment: "Commercial",
+      source_system: "Payments hub",
+      queue: "OFAC review",
+      screening_score: 46,
+      relationship_summary: "11-year commercial relationship",
+      posted_at: "2026-08-14T15:10:00Z",
+    },
+    expect: {
+      disposition: "monitor",
+      titleIncludes: "sanctions",
+      minCoverage: 0.9,
+    },
+  },
+  {
+    id: "banking-payroll-act",
+    adapterId: "core-banking",
+    raw: {
+      hold_id: "P-4410",
+      hold_reason: "NSF_PAYROLL",
+      party_name: "River Clinic",
+      reason_detail: "Collected balance 41k short of payroll ACH. 214 employees.",
+      next_step: "Call the office manager. Offer same-day wire path.",
+      open_questions: "Could be a delayed insurance receivable.",
+      product_code: "ACH",
+      amount_usd: 486000,
+      cutoff_hours: 1,
+      segment: "Commercial",
+      source_system: "Core",
+      queue: "ACH exceptions",
+      screening_score: 92,
+      relationship_summary: "Prior miss Dec 2025, recovered same day",
+      posted_at: "2026-08-14T15:40:00Z",
+    },
+    expect: {
+      disposition: "act",
+      titleIncludes: "Payroll",
+      minCoverage: 0.9,
+    },
+  },
+  {
+    id: "plant-genealogy-conflict",
+    adapterId: "plant-ops",
+    raw: {
+      eventId: "E-8H-221",
+      eventType: "SPC_SHIFT",
+      summary: "Batch genealogy mismatch",
+      assetPath: "Batch 8H-221",
+      assetName: "Packaging",
+      detail: "MES says drum 14 came from lot A. LIMS COA is lot B. Warehouse scan is lot B.",
+      recommendation: "Hold the batch. Do not ship on a majority vote.",
+      openQuestion: "Could be a scan error. Could be a mix.",
+      estLossUsd: 96000,
+      windowHours: 6,
+      constraintHours: 6,
+      sourceSystem: "MES + LIMS",
+      safetyBand: "Critical",
+      signalConfidencePct: 60,
+      tagName: "MES.GENEALOGY",
+      operatorNote: "Hold requested",
+      qmsReference: "DEV-8H-221",
+      detectedAt: "2026-08-14T14:00:00Z",
+      lots: [
+        { system: "MES", lot: "A" },
+        { system: "LIMS", lot: "B" },
+        { system: "WMS", lot: "B" },
+      ],
+    },
+    expect: {
+      disposition: "act",
+      titleIncludes: "mismatch",
+      evidenceLabel: "lots",
+      hasNestedEvidence: true,
+      conflict: true,
+      minCoverage: 0.9,
+    },
+  },
+  {
+    id: "openpages-missing-required",
+    adapterId: "openpages",
+    raw: { comment: "a feed ping with no issue body" },
+    expectIngestError: true,
+  },
+];

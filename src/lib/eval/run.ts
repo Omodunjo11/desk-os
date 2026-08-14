@@ -1,0 +1,135 @@
+import { ADAPTER_MAP } from "../adapters";
+import { ingestPayload } from "../ingest";
+import { ingestToCases } from "../pipeline";
+import { GOLD, type GoldCase } from "./gold";
+
+export type Check = {
+  goldId: string;
+  name: string;
+  pass: boolean;
+  detail: string;
+};
+
+export type EvalReport = {
+  passed: number;
+  failed: number;
+  checks: Check[];
+};
+
+function check(goldId: string, name: string, pass: boolean, detail: string): Check {
+  return { goldId, name, pass, detail };
+}
+
+function runGold(gold: GoldCase): Check[] {
+  const manifest = ADAPTER_MAP[gold.adapterId];
+  if (!manifest) {
+    return [check(gold.id, "adapter", false, `Unknown adapter ${gold.adapterId}`)];
+  }
+
+  if (gold.expectIngestError) {
+    const parsed = ingestPayload(JSON.stringify(gold.raw), manifest.required);
+    return [
+      check(
+        gold.id,
+        "reject-thin-payload",
+        !parsed.ok,
+        parsed.ok ? "Accepted a record with no required fields" : parsed.errors.join("; ")
+      ),
+    ];
+  }
+
+  const result = ingestToCases(JSON.stringify(gold.raw), manifest);
+  const item = result.cases[0];
+  const expect = gold.expect;
+  if (!expect) {
+    return [check(gold.id, "expect", false, "Gold case has no expect block")];
+  }
+  if (!item) {
+    return [check(gold.id, "ingest", false, result.errors.join("; ") || "No case produced")];
+  }
+
+  const checks: Check[] = [
+    check(
+      gold.id,
+      "disposition",
+      item.recommendedDisposition === expect.disposition,
+      `got ${item.recommendedDisposition ?? "none"}, want ${expect.disposition}`
+    ),
+  ];
+
+  if (expect.titleIncludes) {
+    const hit = item.title.toLowerCase().includes(expect.titleIncludes.toLowerCase());
+    checks.push(check(gold.id, "title", hit, item.title));
+  }
+
+  if (expect.minCoverage !== undefined) {
+    const coverage = item.intakeCoverage ?? 0;
+    checks.push(
+      check(
+        gold.id,
+        "coverage",
+        coverage >= expect.minCoverage,
+        `coverage ${coverage}, want >= ${expect.minCoverage}`
+      )
+    );
+  }
+
+  if (expect.evidenceLabel) {
+    const hit = item.evidence.some((row) =>
+      row.label.toLowerCase().includes(expect.evidenceLabel!.toLowerCase())
+    );
+    checks.push(
+      check(
+        gold.id,
+        "nested-evidence",
+        hit,
+        hit ? `found ${expect.evidenceLabel}` : item.evidence.map((e) => e.label).join(", ") || "none"
+      )
+    );
+  }
+
+  if (expect.hasNestedEvidence) {
+    checks.push(
+      check(
+        gold.id,
+        "package-depth",
+        (item.facts?.length ?? 0) > 8,
+        `${item.facts?.length ?? 0} facts`
+      )
+    );
+  }
+
+  if (expect.conflict) {
+    const hit = (item.uncertainty ?? "").toLowerCase().includes("disagree");
+    checks.push(check(gold.id, "conflict", hit, item.uncertainty ?? ""));
+  }
+
+  return checks;
+}
+
+export function runEval(): EvalReport {
+  const checks = GOLD.flatMap(runGold);
+  return {
+    passed: checks.filter((c) => c.pass).length,
+    failed: checks.filter((c) => !c.pass).length,
+    checks,
+  };
+}
+
+export function formatReport(report: EvalReport) {
+  const lines = [
+    `Desk eval  ${report.passed} passed / ${report.failed} failed / ${report.checks.length} checks`,
+    "",
+  ];
+  for (const row of report.checks) {
+    lines.push(`${row.pass ? "PASS" : "FAIL"}  ${row.goldId}  ${row.name}  ${row.detail}`);
+  }
+  return lines.join("\n");
+}
+
+const isMain = process.argv[1]?.includes("eval/run");
+if (isMain) {
+  const report = runEval();
+  console.log(formatReport(report));
+  process.exit(report.failed > 0 ? 1 : 0);
+}
