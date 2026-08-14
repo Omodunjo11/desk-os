@@ -27,6 +27,7 @@ export default function CaseClient({
   const item = cases.find((c) => c.id === caseId) ?? ranked.find((r) => r.item.id === caseId)?.item;
   const rankedRow = ranked.find((r) => r.item.id === caseId);
   const [note, setNote] = useState("");
+  const [noteRequired, setNoteRequired] = useState(false);
 
   if (!process || !template || !item) {
     return (
@@ -46,6 +47,12 @@ export default function CaseClient({
       (rankedRow.band === "P3" && (rankedRow.severity === "critical" || rankedRow.severity === "high")));
 
   const act = (key: DispositionKey) => {
+    const isHighRiskDismiss = key === "dismiss" && rankedRow?.band === "P1";
+    if (isHighRiskDismiss && note.trim().length === 0) {
+      setNoteRequired(true);
+      return;
+    }
+    setNoteRequired(false);
     store.dispose(processId, item.id, key, note);
     router.push(`/p/${processId}`);
   };
@@ -127,10 +134,23 @@ export default function CaseClient({
               <p className="foot">Current: {current ? labels(current.key) : "Open"}</p>
               <textarea
                 className="note"
-                placeholder="Optional note for the ledger"
+                placeholder={
+                  rankedRow?.band === "P1"
+                    ? "Note for the ledger (required to dismiss a P1)"
+                    : "Optional note for the ledger"
+                }
                 value={note}
-                onChange={(e) => setNote(e.target.value)}
+                onChange={(e) => {
+                  setNote(e.target.value);
+                  if (noteRequired) setNoteRequired(false);
+                }}
               />
+              {noteRequired && (
+                <p className="divergence">
+                  Dismissing a P1 case is the highest-risk override in this queue. Write
+                  a note explaining why before it clears.
+                </p>
+              )}
               <div className="actions">
                 {template.dispositions.map((d) => (
                   <button
