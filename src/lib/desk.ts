@@ -19,6 +19,8 @@ export type {
   Severity,
 } from "./types";
 export { draftActionStub, isHappyPath, reasonNotEligible } from "./actions";
+export { analyzeLearning } from "./learn";
+export type { LearnSummary, WeightSuggestion } from "./learn";
 
 export { TEMPLATES, TEMPLATE_MAP } from "./templates";
 export {
