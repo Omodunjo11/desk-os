@@ -1,4 +1,6 @@
-import type { CaseItem, DispositionKey, DraftedAction, ProcessTemplate } from "./types";
+import { recommendDisposition } from "./deepen";
+import { hasConflictLanguage } from "./flatten";
+import type { CaseItem, DispositionKey, DraftedAction, Fact, ProcessTemplate } from "./types";
 
 /**
  * Happy path = confident enough to draft on: coverage is full, nothing
@@ -25,6 +27,31 @@ export function reasonNotEligible(item: CaseItem): string | null {
     return `Packet is incomplete (missing: ${item.gaps.join(", ")}). Needs a human to fill the gap first.`;
   }
   return "Not eligible for an agent draft yet.";
+}
+
+/**
+ * Seed/demo cases are hand-authored, not run through deepen(), so they never
+ * carry recommendedDisposition/gaps/hasConflict. Back-fill from the same
+ * signals a real ingest would produce: scores for the disposition, and every
+ * bit of hand-written narrative (title, why, uncertainty, evidence) scanned
+ * for conflict language, so a case like "genealogy mismatch" still gets
+ * blocked from auto-drafting even without a raw nested payload to walk.
+ */
+export function backfillIntake(item: CaseItem): CaseItem {
+  if (item.recommendedDisposition) return item;
+  const facts: Fact[] = [
+    { path: "title", value: item.title },
+    { path: "whyFlagged", value: item.whyFlagged },
+    { path: "uncertainty", value: item.uncertainty },
+    ...item.evidence.map((e) => ({ path: e.label, value: e.detail })),
+  ];
+  return {
+    ...item,
+    recommendedDisposition: recommendDisposition(item.scores),
+    gaps: [],
+    intakeCoverage: 1,
+    hasConflict: hasConflictLanguage(facts),
+  };
 }
 
 function dispositionLabel(template: ProcessTemplate, key: DispositionKey): string {

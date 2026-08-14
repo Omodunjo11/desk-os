@@ -9,6 +9,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { backfillIntake } from "./actions";
 import { rankCases } from "./ranking";
 import { TEMPLATES, TEMPLATE_MAP } from "./templates";
 import type {
@@ -51,17 +52,21 @@ export function emptyCustom(template: ProcessTemplate): ProcessCustomization {
 }
 
 function seedCases(): Record<string, CaseItem[]> {
-  return Object.fromEntries(TEMPLATES.map((t) => [t.id, t.cases.map((c) => ({ ...c }))]));
+  return Object.fromEntries(
+    TEMPLATES.map((t) => [t.id, t.cases.map((c) => backfillIntake({ ...c }))])
+  );
 }
 
 function cloneCases(processId: string, templateId: DeskId): CaseItem[] {
-  return TEMPLATE_MAP[templateId].cases.map((item) => ({
-    ...item,
-    id: `${processId}:${item.id}`,
-    values: { ...item.values },
-    scores: { ...item.scores },
-    evidence: item.evidence.map((e) => ({ ...e })),
-  }));
+  return TEMPLATE_MAP[templateId].cases.map((item) =>
+    backfillIntake({
+      ...item,
+      id: `${processId}:${item.id}`,
+      values: { ...item.values },
+      scores: { ...item.scores },
+      evidence: item.evidence.map((e) => ({ ...e })),
+    })
+  );
 }
 
 function emptyStore(): StoreShape {
