@@ -121,6 +121,7 @@ export function deepen(
     gaps,
     intakeCoverage: Math.round(coverage * 100) / 100,
     recommendedDisposition,
+    hasConflict: conflict,
     whyFlagged: whyFor(item, facts),
     recommendedAction: actionFor(recommendedDisposition, item.recommendedAction),
     uncertainty: uncertaintyFor(item, gaps, conflict),

@@ -6,6 +6,7 @@ export type {
   DeskId,
   DispositionDef,
   DispositionKey,
+  DraftedAction,
   Evidence,
   Fact,
   FieldDef,
@@ -17,6 +18,7 @@ export type {
   RankingInput,
   Severity,
 } from "./types";
+export { draftActionStub, isHappyPath, reasonNotEligible } from "./actions";
 
 export { TEMPLATES, TEMPLATE_MAP } from "./templates";
 export {

@@ -402,3 +402,18 @@ input[type="range"] { accent-color: var(--ink); width: 100%; }
 }
 
 .empty { color: var(--muted); font-size: 0.85rem; padding: 24px 16px; text-align: center; }
+
+.steps { margin: 10px 0; padding-left: 18px; display: grid; gap: 6px; }
+.steps li { font-size: 0.86rem; line-height: 1.5; }
+
+.agent-tag {
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--blue);
+  background: var(--blue-soft);
+  padding: 2px 6px;
+  margin-left: 6px;
+  display: inline-block;
+}

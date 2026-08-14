@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import clsx from "clsx";
-import { formatScore, useProcess } from "@/lib/desk";
+import { formatScore, isHappyPath, reasonNotEligible, useProcess } from "@/lib/desk";
 import type { DispositionKey } from "@/lib/desk";
 
 export default function CaseClient({
@@ -28,6 +28,8 @@ export default function CaseClient({
   const rankedRow = ranked.find((r) => r.item.id === caseId);
   const [note, setNote] = useState("");
   const [noteRequired, setNoteRequired] = useState(false);
+  const [drafting, setDrafting] = useState(false);
+  const [draftError, setDraftError] = useState<string | null>(null);
 
   if (!process || !template || !item) {
     return (
@@ -46,15 +48,41 @@ export default function CaseClient({
     ((rankedRow.band === "P1" && rankedRow.severity === "low") ||
       (rankedRow.band === "P3" && (rankedRow.severity === "critical" || rankedRow.severity === "high")));
 
-  const act = (key: DispositionKey) => {
+  const act = (key: DispositionKey, source: "manual" | "agent" = "manual", noteOverride?: string) => {
+    const finalNote = noteOverride ?? note;
     const isHighRiskDismiss = key === "dismiss" && rankedRow?.band === "P1";
-    if (isHighRiskDismiss && note.trim().length === 0) {
+    if (isHighRiskDismiss && finalNote.trim().length === 0) {
       setNoteRequired(true);
       return;
     }
     setNoteRequired(false);
-    store.dispose(processId, item.id, key, note);
+    store.dispose(processId, item.id, key, finalNote, source);
     router.push(`/p/${processId}`);
+  };
+
+  const requestDraft = async () => {
+    setDrafting(true);
+    setDraftError(null);
+    try {
+      const res = await fetch("/api/draft-action", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ item, templateId: template.id }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Could not draft an action.");
+      store.setDraft(processId, item.id, data.draftedAction);
+    } catch (err) {
+      setDraftError(err instanceof Error ? err.message : "Could not draft an action.");
+    } finally {
+      setDrafting(false);
+    }
+  };
+
+  const approveDraft = () => {
+    if (!item.draftedAction || !item.recommendedDisposition) return;
+    const combined = [item.draftedAction.summary, note.trim()].filter(Boolean).join(" — ");
+    act(item.recommendedDisposition, "agent", combined);
   };
 
   return (
@@ -166,6 +194,54 @@ export default function CaseClient({
               </div>
             </div>
           </div>
+
+          {!current && (
+            <div className="panel">
+              <h2>Actionable steps</h2>
+              {!isHappyPath(item) && !item.draftedAction && (
+                <p className="warn">{reasonNotEligible(item)}</p>
+              )}
+              {isHappyPath(item) && !item.draftedAction && (
+                <>
+                  <p className="muted">
+                    Full coverage, no conflicts, confident enough to draft. An agent can
+                    stage the next steps for you to approve.
+                  </p>
+                  <button type="button" className="btn" onClick={requestDraft} disabled={drafting}>
+                    {drafting ? "Drafting…" : "Draft next steps"}
+                  </button>
+                  {draftError && <p className="warn">{draftError}</p>}
+                </>
+              )}
+              {item.draftedAction && (
+                <>
+                  <p className="muted">{item.draftedAction.summary}</p>
+                  <ol className="steps">
+                    {item.draftedAction.steps.map((step, i) => (
+                      <li key={i}>{step}</li>
+                    ))}
+                  </ol>
+                  <p className="foot">
+                    {item.draftedAction.source === "stub"
+                      ? "Stub draft — connect a model to generate real drafts."
+                      : "Agent-drafted."}
+                  </p>
+                  <div className="actions">
+                    <button type="button" className="btn green" onClick={approveDraft}>
+                      Approve &amp; execute
+                    </button>
+                    <button
+                      type="button"
+                      className="btn"
+                      onClick={() => store.clearDraft(processId, item.id)}
+                    >
+                      Discard draft
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </div>

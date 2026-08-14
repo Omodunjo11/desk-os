@@ -99,9 +99,17 @@ type DeskStore = StoreShape & {
   customize: (processId: string, patch: Partial<ProcessCustomization>) => void;
   resetCustom: (processId: string) => void;
   ingestCases: (processId: string, cases: CaseItem[], mode?: "append" | "replace") => void;
-  dispose: (processId: string, caseId: string, key: DispositionKey, note?: string) => void;
+  dispose: (
+    processId: string,
+    caseId: string,
+    key: DispositionKey,
+    note?: string,
+    source?: "manual" | "agent"
+  ) => void;
   reopen: (caseId: string) => void;
   resetAll: () => void;
+  setDraft: (processId: string, caseId: string, draft: CaseItem["draftedAction"]) => void;
+  clearDraft: (processId: string, caseId: string) => void;
 };
 
 const Ctx = createContext<DeskStore | null>(null);
@@ -208,15 +216,45 @@ export function DeskProvider({ children }: { children: ReactNode }) {
     []
   );
 
-  const dispose = useCallback((processId: string, caseId: string, key: DispositionKey, note = "") => {
-    setState((s) => ({
-      ...s,
-      ledger: [
-        { caseId, processId, key, note, at: new Date().toISOString() },
-        ...s.ledger.filter((l) => !(l.caseId === caseId && l.processId === processId)),
-      ],
-    }));
-  }, []);
+  const dispose = useCallback(
+    (
+      processId: string,
+      caseId: string,
+      key: DispositionKey,
+      note = "",
+      source: "manual" | "agent" = "manual"
+    ) => {
+      setState((s) => ({
+        ...s,
+        ledger: [
+          { caseId, processId, key, note, source, at: new Date().toISOString() },
+          ...s.ledger.filter((l) => !(l.caseId === caseId && l.processId === processId)),
+        ],
+      }));
+    },
+    []
+  );
+
+  const setDraft = useCallback(
+    (processId: string, caseId: string, draft: CaseItem["draftedAction"]) => {
+      setState((s) => {
+        const existing = s.casesByProcess[processId] ?? [];
+        return {
+          ...s,
+          casesByProcess: {
+            ...s.casesByProcess,
+            [processId]: existing.map((c) => (c.id === caseId ? { ...c, draftedAction: draft } : c)),
+          },
+        };
+      });
+    },
+    []
+  );
+
+  const clearDraft = useCallback(
+    (processId: string, caseId: string) => setDraft(processId, caseId, undefined),
+    [setDraft]
+  );
 
   const reopen = useCallback((caseId: string) => {
     setState((s) => ({ ...s, ledger: s.ledger.filter((l) => l.caseId !== caseId) }));
@@ -240,6 +278,8 @@ export function DeskProvider({ children }: { children: ReactNode }) {
       dispose,
       reopen,
       resetAll,
+      setDraft,
+      clearDraft,
     }),
     [
       state,
@@ -252,6 +292,8 @@ export function DeskProvider({ children }: { children: ReactNode }) {
       dispose,
       reopen,
       resetAll,
+      setDraft,
+      clearDraft,
     ]
   );
 

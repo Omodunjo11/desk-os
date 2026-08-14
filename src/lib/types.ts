@@ -64,6 +64,18 @@ export type CaseItem = {
   intakeCoverage?: number;
   /** What the intake layer would do. Analyst can override. */
   recommendedDisposition?: DispositionKey;
+  /** Source facts contradict each other (e.g. mismatched totals). Blocks agent drafting. */
+  hasConflict?: boolean;
+  /** Staged action from the drafting layer, awaiting analyst approval. */
+  draftedAction?: DraftedAction;
+};
+
+export type DraftedAction = {
+  summary: string;
+  steps: string[];
+  generatedAt: string;
+  /** "stub" until an LLM is wired in; "agent" once a real model drafts it. */
+  source: "stub" | "agent";
 };
 
 export type ProcessTemplate = {
@@ -100,4 +112,6 @@ export type LoggedDisposition = {
   key: DispositionKey;
   note: string;
   at: string;
+  /** Who executed this disposition: an analyst, or an approved agent draft. */
+  source: "manual" | "agent";
 };

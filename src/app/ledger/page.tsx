@@ -33,7 +33,10 @@ export default function LedgerPage() {
               <span className="num">{new Date(row.at).toLocaleString()}</span>
               <span>{process?.name ?? row.processId}</span>
               <Link href={`/p/${row.processId}/${encodeURIComponent(row.caseId)}`}>{row.caseId}</Link>
-              <span className={`disp-pill ${row.key}`}>{label}</span>
+              <span className={`disp-pill ${row.key}`}>
+                {label}
+                {row.source === "agent" && <span className="agent-tag">Agent</span>}
+              </span>
               <span>{row.note || "—"}</span>
               <button type="button" className="btn" onClick={() => reopen(row.caseId)}>
                 Reopen
