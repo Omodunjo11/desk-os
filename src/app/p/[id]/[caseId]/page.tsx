@@ -1,4 +1,4 @@
-import CaseWorkspaceClient from "@/components/CaseWorkspaceClient";
+import CaseClient from "@/components/CaseClient";
 
 export default async function CasePage({
   params,
@@ -6,5 +6,5 @@ export default async function CasePage({
   params: Promise<{ id: string; caseId: string }>;
 }) {
   const { id, caseId } = await params;
-  return <CaseWorkspaceClient processId={id} caseId={caseId} />;
+  return <CaseClient processId={id} caseId={caseId} />;
 }
