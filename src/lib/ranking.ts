@@ -1,11 +1,26 @@
+import { classifyPolicy } from "./policy";
+import { learnFactor, similarOutcomes, type SimilarOutcomes } from "./learn";
 import type {
   CaseItem,
+  LoggedDisposition,
+  PolicyHit,
   PriorityBand,
   ProcessCustomization,
   ProcessTemplate,
   RankingInput,
   Severity,
 } from "./types";
+
+export type RankedCase = {
+  item: CaseItem;
+  score: number;
+  band: PriorityBand;
+  severity: Severity;
+  policy: PolicyHit;
+  similar: SimilarOutcomes;
+  floodCount: number;
+  collapsedInto?: string;
+};
 
 export function recencyFactor(hours: number) {
   return Math.exp(-hours / 96);
@@ -27,10 +42,13 @@ export function weightedScore(
 export function priorityScore(
   item: CaseItem,
   template: ProcessTemplate,
-  custom?: ProcessCustomization
+  custom?: ProcessCustomization,
+  similar?: SimilarOutcomes
 ) {
   const base = weightedScore(item.scores, template.rankingInputs, custom?.weights);
-  return clamp(base * (0.55 + 0.45 * recencyFactor(item.recencyHours)));
+  const recency = 0.55 + 0.45 * recencyFactor(item.recencyHours);
+  const learned = similar ? learnFactor(similar) : 1;
+  return clamp(base * recency * learned);
 }
 
 export function band(score: number): PriorityBand {
@@ -47,17 +65,71 @@ export function severityOf(item: CaseItem): Severity {
   return "low";
 }
 
+function isAlarmLike(item: CaseItem) {
+  const type = String(item.values.type ?? "").toLowerCase();
+  return type === "alarm" || item.title.toLowerCase().includes("alarm");
+}
+
+function annotateFlood(rows: RankedCase[]): RankedCase[] {
+  const groups = new Map<string, RankedCase[]>();
+  for (const row of rows) {
+    if (!isAlarmLike(row.item) || row.item.recencyHours > 2) continue;
+    const asset = String(row.item.values.asset ?? "").trim();
+    if (!asset) continue;
+    const list = groups.get(asset) ?? [];
+    list.push(row);
+    groups.set(asset, list);
+  }
+
+  const collapsed = new Map<string, { master: string; count: number }>();
+  for (const [, group] of groups) {
+    if (group.length < 2) continue;
+    const master = [...group].sort((a, b) => {
+      if (a.policy.floor !== b.policy.floor) return a.policy.floor - b.policy.floor;
+      return b.score - a.score;
+    })[0];
+    for (const row of group) {
+      collapsed.set(row.item.id, { master: master.item.id, count: group.length });
+    }
+  }
+
+  return rows.map((row) => {
+    const flood = collapsed.get(row.item.id);
+    if (!flood) return row;
+    return {
+      ...row,
+      floodCount: flood.count,
+      collapsedInto: flood.master === row.item.id ? undefined : flood.master,
+    };
+  });
+}
+
 export function rankCases(
   cases: CaseItem[],
   template: ProcessTemplate,
-  custom?: ProcessCustomization
-) {
-  return [...cases]
-    .map((item) => {
-      const score = priorityScore(item, template, custom);
-      return { item, score, band: band(score), severity: severityOf(item) };
-    })
-    .sort((a, b) => b.score - a.score);
+  custom?: ProcessCustomization,
+  ledger: LoggedDisposition[] = []
+): RankedCase[] {
+  const ranked = cases.map((item) => {
+    const similar = similarOutcomes(item, ledger, cases);
+    const score = priorityScore(item, template, custom, similar);
+    return {
+      item,
+      score,
+      band: band(score),
+      severity: severityOf(item),
+      policy: classifyPolicy(item, template),
+      similar,
+      floodCount: 0,
+    };
+  });
+
+  ranked.sort((a, b) => {
+    if (a.policy.floor !== b.policy.floor) return a.policy.floor - b.policy.floor;
+    return b.score - a.score;
+  });
+
+  return annotateFlood(ranked);
 }
 
 function clamp(n: number) {
@@ -79,7 +151,7 @@ export function formatField(type: string, value: string | number) {
     }
     if (type === "percent") return `${Math.round(value * 100)}%`;
     if (type === "hours") return `${value}h`;
-    if (type === "score") return formatScore(value);
   }
+  if (type === "score") return formatScore(Number(value));
   return String(value);
 }

@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import clsx from "clsx";
-import { formatScore, useProcess } from "@/lib/desk";
+import { formatScore, noteRequiredFor, stageWriteback, useProcess } from "@/lib/desk";
 import type { DispositionKey } from "@/lib/desk";
 
 export default function CaseClient({
@@ -27,7 +27,7 @@ export default function CaseClient({
   const item = cases.find((c) => c.id === caseId) ?? ranked.find((r) => r.item.id === caseId)?.item;
   const rankedRow = ranked.find((r) => r.item.id === caseId);
   const [note, setNote] = useState("");
-  const [noteRequired, setNoteRequired] = useState(false);
+  const [blockReason, setBlockReason] = useState<string | null>(null);
 
   if (!process || !template || !item) {
     return (
@@ -41,40 +41,50 @@ export default function CaseClient({
   }
 
   const current = dispositionFor(item.id);
+  const policy = rankedRow?.policy;
+  const preview = stageWriteback(item, "monitor", note);
   const diverge =
     rankedRow &&
     ((rankedRow.band === "P1" && rankedRow.severity === "low") ||
       (rankedRow.band === "P3" && (rankedRow.severity === "critical" || rankedRow.severity === "high")));
 
   const act = (key: DispositionKey) => {
-    const isHighRiskDismiss = key === "dismiss" && rankedRow?.band === "P1";
-    if (isHighRiskDismiss && note.trim().length === 0) {
-      setNoteRequired(true);
+    const result = store.dispose(processId, item.id, key, note);
+    if (!result.ok) {
+      setBlockReason(result.reason);
       return;
     }
-    setNoteRequired(false);
-    store.dispose(processId, item.id, key, note);
+    setBlockReason(null);
     router.push(`/p/${processId}`);
   };
+
+  const needsNote = policy
+    ? noteRequiredFor("dismiss", policy, rankedRow?.band ?? "P3")
+    : rankedRow?.band === "P1";
 
   return (
     <div className="page">
       <div className="case-layout">
         <aside className="rail">
           <p className="rail-label">{process.name}</p>
-          {ranked.map((row) => (
-            <Link
-              key={row.item.id}
-              href={`/p/${processId}/${encodeURIComponent(row.item.id)}`}
-              className={clsx("rail-item", row.item.id === item.id && "on")}
-            >
-              <span className={clsx("prio", row.band)}>{row.band}</span>
-              <span>
-                <b>{row.item.title}</b>
-                <i>{row.item.subject}</i>
-              </span>
-            </Link>
-          ))}
+          {ranked
+            .filter((row) => !row.collapsedInto)
+            .map((row) => (
+              <Link
+                key={row.item.id}
+                href={`/p/${processId}/${encodeURIComponent(row.item.id)}`}
+                className={clsx("rail-item", row.item.id === item.id && "on")}
+              >
+                <span className={clsx("prio", row.band)}>{row.band}</span>
+                <span>
+                  <b>{row.item.title}</b>
+                  <i>
+                    {row.policy.hold ? "Hold · " : ""}
+                    {row.item.subject}
+                  </i>
+                </span>
+              </Link>
+            ))}
         </aside>
 
         <div className="case-main">
@@ -82,6 +92,12 @@ export default function CaseClient({
             <p className="kicker">{template.operator}</p>
             <h1>{item.title}</h1>
             <p className="lede">{item.subject}</p>
+            {policy && (
+              <p className={clsx("lane", policy.hold && "hold")} style={{ marginTop: 10 }}>
+                {policy.hold ? "Hold" : "Lane"} · {policy.label}
+                {policy.neverAutoDismiss ? " · cannot auto-clear" : ""}
+              </p>
+            )}
             <div className="kpis">
               <div>
                 <span>Priority</span>
@@ -100,6 +116,11 @@ export default function CaseClient({
                 <b>{item.recommendedDisposition ? labels(item.recommendedDisposition) : "—"}</b>
               </div>
             </div>
+            {policy?.hold && (
+              <p className="divergence">
+                This is a hold, not a ticket. A human has to look. Desk will not auto-release it.
+              </p>
+            )}
             {diverge && (
               <p className="divergence">
                 Priority and severity diverge. Look-now is not the same as harm-if-true.
@@ -124,6 +145,12 @@ export default function CaseClient({
                   Missing for a full decision: {item.gaps.join(", ")}
                 </div>
               )}
+              {rankedRow && rankedRow.similar.dismissed > 0 && (
+                <p className="foot">
+                  {rankedRow.similar.dismissed} similar cases were labeled noise. This row is
+                  down-weighted, not auto-cleared.
+                </p>
+              )}
             </div>
 
             <div className="panel">
@@ -132,25 +159,29 @@ export default function CaseClient({
               </div>
               <div className="warn">{item.uncertainty}</div>
               <p className="foot">Current: {current ? labels(current.key) : "Open"}</p>
+              {preview && (
+                <p className="writeback">
+                  Overlay only. Would label {preview.destination}{" "}
+                  <code>
+                    {preview.field}={preview.value}
+                  </code>{" "}
+                  on {preview.sourceRecordId}. Desk is not the system of record.
+                </p>
+              )}
               <textarea
                 className="note"
                 placeholder={
-                  rankedRow?.band === "P1"
-                    ? "Note for the ledger (required to dismiss a P1)"
+                  needsNote
+                    ? "Note for the ledger (required to dismiss a hold or P1)"
                     : "Optional note for the ledger"
                 }
                 value={note}
                 onChange={(e) => {
                   setNote(e.target.value);
-                  if (noteRequired) setNoteRequired(false);
+                  if (blockReason) setBlockReason(null);
                 }}
               />
-              {noteRequired && (
-                <p className="divergence">
-                  Dismissing a P1 case is the highest-risk override in this queue. Write
-                  a note explaining why before it clears.
-                </p>
-              )}
+              {blockReason && <p className="divergence">{blockReason}</p>}
               <div className="actions">
                 {template.dispositions.map((d) => (
                   <button

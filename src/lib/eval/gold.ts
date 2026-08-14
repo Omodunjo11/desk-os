@@ -143,6 +143,31 @@ export const GOLD: GoldCase[] = [
     },
   },
   {
+    id: "banking-ofac-tiny-never-dismiss",
+    adapterId: "core-banking",
+    raw: {
+      hold_id: "W-12",
+      hold_reason: "OFAC_NEAR_MATCH",
+      party_name: "Harbor Tea LLC",
+      reason_detail: "Name similarity 0.76 against an SDN alias. Amount is $12. Still a hold.",
+      next_step: "Compare full legal name and address. Do not auto-release.",
+      open_questions: "Tiny amount, stale cutoff. Policy still forbids auto-clear.",
+      product_code: "WIRE",
+      amount_usd: 12,
+      cutoff_hours: 96,
+      segment: "SMB",
+      source_system: "Payments hub",
+      queue: "OFAC review",
+      screening_score: 99,
+      relationship_summary: "New onboarding",
+      posted_at: "2026-08-10T15:10:00Z",
+    },
+    expect: {
+      disposition: "monitor",
+      titleIncludes: "sanctions",
+    },
+  },
+  {
     id: "banking-payroll-act",
     adapterId: "core-banking",
     raw: {

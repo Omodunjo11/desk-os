@@ -6,16 +6,20 @@ export type {
   DeskId,
   DispositionDef,
   DispositionKey,
+  DisposeResult,
   Evidence,
   Fact,
   FieldDef,
   LoggedDisposition,
+  PolicyHit,
+  PolicyRule,
   PriorityBand,
   ProcessCustomization,
   ProcessInstance,
   ProcessTemplate,
   RankingInput,
   Severity,
+  WritebackPayload,
 } from "./types";
 
 export { TEMPLATES, TEMPLATE_MAP } from "./templates";
@@ -29,6 +33,18 @@ export {
   severityOf,
   weightedScore,
 } from "./ranking";
+export type { RankedCase } from "./ranking";
+export {
+  POLICY_BY_TEMPLATE,
+  applyPolicyToDisposition,
+  assertDisposition,
+  classifyPolicy,
+  noteRequiredFor,
+  rulesFor,
+} from "./policy";
+export { stageWriteback } from "./writeback";
+export { fingerprint, learnFactor, similarOutcomes } from "./learn";
+export { formatAudit } from "./audit";
 export {
   ADAPTERS,
   ADAPTER_MAP,

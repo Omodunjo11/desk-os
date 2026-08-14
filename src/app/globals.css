@@ -199,7 +199,7 @@ h2 { font-size: 1.25rem; margin: 0 0 8px; }
 .table { width: 100%; background: #fff; border: 1px solid var(--line); overflow-x: auto; }
 .row {
   display: grid;
-  grid-template-columns: 52px 1.6fr 64px repeat(4, minmax(0, 1fr)) 88px 108px;
+  grid-template-columns: 52px 80px 1.4fr 1.2fr repeat(2, minmax(0, 1fr)) 88px 108px;
   gap: 8px;
   padding: 10px 12px;
   border-bottom: 1px solid var(--line);
@@ -209,6 +209,9 @@ h2 { font-size: 1.25rem; margin: 0 0 8px; }
   text-align: left;
   cursor: pointer;
   color: inherit;
+}
+.row.queue {
+  grid-template-columns: 48px 92px 1.5fr 1.3fr minmax(0, 1fr) minmax(0, 1fr) 72px 100px;
 }
 .row.head {
   position: sticky;
@@ -226,7 +229,7 @@ h2 { font-size: 1.25rem; margin: 0 0 8px; }
 .row:not(.head):nth-child(even) { background: var(--wash); }
 .row:not(.head):hover { background: #eaf1f6; }
 .row.done { opacity: 0.55; }
-.row.ledger { grid-template-columns: 132px 1fr 1.6fr 92px 1.4fr 84px; cursor: default; }
+.row.ledger { grid-template-columns: 132px 1fr 1.4fr 92px 1.6fr 84px; cursor: default; }
 .row.ledger:not(.head):nth-child(even) { background: var(--wash); }
 .num { text-align: right; }
 
@@ -241,6 +244,20 @@ h2 { font-size: 1.25rem; margin: 0 0 8px; }
 .prio.P2 { background: var(--amber-soft); color: var(--amber); }
 .prio.P3 { background: var(--blue-soft); color: var(--blue); }
 
+.lane {
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.lane.hold {
+  color: var(--rust);
+  background: var(--rust-soft);
+  padding: 3px 6px;
+  display: inline-block;
+}
+
 .sev { font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; }
 .sev.critical { color: var(--rust); }
 .sev.high { color: #b45309; }
@@ -248,7 +265,16 @@ h2 { font-size: 1.25rem; margin: 0 0 8px; }
 .sev.low { color: var(--green); }
 
 .title-cell b { display: block; font-size: 0.88rem; }
-.title-cell i { font-style: normal; font-size: 0.75rem; color: var(--slate); }
+.title-cell i {
+  font-style: normal;
+  font-size: 0.75rem;
+  color: var(--slate);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.row .title-cell { display: block; min-width: 0; overflow: hidden; }
 .num { font-variant-numeric: tabular-nums; font-size: 0.82rem; }
 .disp-pill { font-size: 0.72rem; font-weight: 650; }
 .disp-pill.open { color: var(--muted); }
@@ -389,6 +415,17 @@ input[type="range"] { accent-color: var(--ink); width: 100%; }
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--muted);
+}
+
+.writeback {
+  font-size: 0.78rem;
+  color: var(--slate);
+  line-height: 1.45;
+  margin: 8px 0 0;
+}
+.writeback code {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
 }
 
 .divergence {

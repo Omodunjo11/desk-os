@@ -11,17 +11,20 @@ import {
 } from "react";
 import { rankCases } from "./ranking";
 import { TEMPLATES, TEMPLATE_MAP } from "./templates";
+import { assertDisposition } from "./policy";
+import { stageWriteback } from "./writeback";
 import type {
   CaseItem,
   DeskId,
   DispositionKey,
+  DisposeResult,
   LoggedDisposition,
   ProcessCustomization,
   ProcessInstance,
   ProcessTemplate,
 } from "./types";
 
-const STORAGE_KEY = "desk-os-v1";
+const STORAGE_KEY = "desk-os-v2";
 
 type StoreShape = {
   processes: ProcessInstance[];
@@ -99,7 +102,7 @@ type DeskStore = StoreShape & {
   customize: (processId: string, patch: Partial<ProcessCustomization>) => void;
   resetCustom: (processId: string) => void;
   ingestCases: (processId: string, cases: CaseItem[], mode?: "append" | "replace") => void;
-  dispose: (processId: string, caseId: string, key: DispositionKey, note?: string) => void;
+  dispose: (processId: string, caseId: string, key: DispositionKey, note?: string) => DisposeResult;
   reopen: (caseId: string) => void;
   resetAll: () => void;
 };
@@ -208,15 +211,50 @@ export function DeskProvider({ children }: { children: ReactNode }) {
     []
   );
 
-  const dispose = useCallback((processId: string, caseId: string, key: DispositionKey, note = "") => {
-    setState((s) => ({
-      ...s,
-      ledger: [
-        { caseId, processId, key, note, at: new Date().toISOString() },
-        ...s.ledger.filter((l) => !(l.caseId === caseId && l.processId === processId)),
-      ],
-    }));
-  }, []);
+  const dispose = useCallback(
+    (processId: string, caseId: string, key: DispositionKey, note = ""): DisposeResult => {
+      let result: DisposeResult = { ok: false, reason: "Process or case not found." };
+      setState((s) => {
+        const process = s.processes.find((p) => p.id === processId);
+        if (!process) return s;
+        const template = TEMPLATE_MAP[process.templateId];
+        const cases = s.casesByProcess[processId] ?? template.cases;
+        const item = cases.find((c) => c.id === caseId);
+        if (!item) return s;
+        const ranked = rankCases(
+          cases,
+          template,
+          s.customizations[processId],
+          s.ledger.filter((l) => l.processId === processId)
+        );
+        const row = ranked.find((r) => r.item.id === caseId);
+        const policy = row?.policy;
+        if (!policy) return s;
+        const gate = assertDisposition(key, policy, row.band, note);
+        if (!gate.ok) {
+          result = gate;
+          return s;
+        }
+        const entry: LoggedDisposition = {
+          caseId,
+          processId,
+          key,
+          note,
+          at: new Date().toISOString(),
+          policyId: policy.id,
+          policyLabel: policy.label,
+          writeback: stageWriteback(item, key, note),
+        };
+        result = { ok: true, entry };
+        return {
+          ...s,
+          ledger: [entry, ...s.ledger.filter((l) => !(l.caseId === caseId && l.processId === processId))],
+        };
+      });
+      return result;
+    },
+    []
+  );
 
   const reopen = useCallback((caseId: string) => {
     setState((s) => ({ ...s, ledger: s.ledger.filter((l) => l.caseId !== caseId) }));
@@ -286,8 +324,8 @@ export function useProcess(processId: string) {
 
   const ranked = useMemo(() => {
     if (!template) return [];
-    return rankCases(cases, template, custom);
-  }, [cases, template, custom]);
+    return rankCases(cases, template, custom, dispositions);
+  }, [cases, template, custom, dispositions]);
 
   return {
     store,

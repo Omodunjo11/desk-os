@@ -1,6 +1,10 @@
 import { ADAPTER_MAP } from "../adapters";
 import { ingestPayload } from "../ingest";
 import { ingestToCases } from "../pipeline";
+import { assertDisposition, classifyPolicy } from "../policy";
+import { rankCases } from "../ranking";
+import { TEMPLATE_MAP } from "../templates";
+import { stageWriteback } from "../writeback";
 import { GOLD, type GoldCase } from "./gold";
 
 export type Check = {
@@ -107,8 +111,80 @@ function runGold(gold: GoldCase): Check[] {
   return checks;
 }
 
+function runPolicyChecks(): Check[] {
+  const banking = TEMPLATE_MAP.banking;
+  const ofac = banking.cases.find((c) => c.id === "bnk-wire-ofac");
+  const ach = banking.cases.find((c) => c.id === "bnk-duplicate-ach");
+  if (!ofac || !ach) {
+    return [check("policy-floor", "seed", false, "Missing banking seed cases")];
+  }
+
+  const quietHold = {
+    ...ofac,
+    scores: { exposure: 0.08, urgency: 0.12, customer: 0.2, confidence: 0.95 },
+    values: { ...ofac.values, amount: 12, sla: 72 },
+    recencyHours: 40,
+  };
+  const loudAch = {
+    ...ach,
+    scores: { exposure: 0.96, urgency: 0.99, customer: 0.9, confidence: 0.95 },
+    recencyHours: 0.2,
+  };
+  const ranked = rankCases([quietHold, loudAch], banking);
+  const top = ranked[0];
+
+  const policy = classifyPolicy(quietHold, banking);
+  const blocked = assertDisposition("dismiss", policy, "P3", "");
+  const allowed = assertDisposition(
+    "dismiss",
+    policy,
+    "P3",
+    "Address and tax id fail the second identifier."
+  );
+  const writeback = stageWriteback(quietHold, "monitor", "Need second identifier");
+
+  const plant = TEMPLATE_MAP.engineering;
+  const flooded = rankCases(plant.cases, plant);
+  const master = flooded.find((row) => row.item.id === "eng-alarms");
+  const sibling = flooded.find((row) => row.item.id === "eng-alarm-dp");
+
+  return [
+    check(
+      "policy-floor",
+      "ofac-before-ach-noise",
+      top?.item.id === quietHold.id,
+      ranked.map((row) => `${row.item.id}:${row.policy.label}`).join(" > ")
+    ),
+    check("policy-floor", "ofac-is-hold", Boolean(top?.policy.hold), top?.policy.label ?? "none"),
+    check(
+      "hold-guard",
+      "dismiss-without-note",
+      !blocked.ok,
+      blocked.ok ? "allowed" : blocked.reason
+    ),
+    check(
+      "hold-guard",
+      "dismiss-with-note",
+      allowed.ok,
+      allowed.ok ? "allowed" : allowed.reason
+    ),
+    check(
+      "writeback",
+      "staged-label",
+      Boolean(writeback?.value === "HOLD_PENDING_EVIDENCE" && writeback.overlayOnly),
+      writeback ? `${writeback.destination} ${writeback.field}=${writeback.value}` : "none"
+    ),
+    check(
+      "alarm-flood",
+      "collapse-siblings",
+      (master?.floodCount ?? 0) >= 3 && sibling?.collapsedInto === "eng-alarms",
+      `master ${master?.floodCount ?? 0}, sibling → ${sibling?.collapsedInto ?? "none"}`
+    ),
+  ];
+}
+
 export function runEval(): EvalReport {
-  const checks = GOLD.flatMap(runGold);
+  const checks = [...GOLD.flatMap(runGold), ...runPolicyChecks()];
   return {
     passed: checks.filter((c) => c.pass).length,
     failed: checks.filter((c) => !c.pass).length,

@@ -1,6 +1,6 @@
 "use client";
 
-import { useDesk, emptyCustom } from "@/lib/desk";
+import { useDesk, emptyCustom, rulesFor } from "@/lib/desk";
 import type { DispositionKey, ProcessTemplate } from "@/lib/desk";
 
 export default function CustomizePanel({
@@ -86,6 +86,24 @@ export default function CustomizePanel({
           </div>
         ))}
       </div>
+
+      <h3 style={{ fontSize: "0.82rem", margin: "14px 0 6px" }}>Policy lanes (not customizable)</h3>
+      <p className="foot">
+        Score never outranks these floors. Holds cannot auto-clear. That is the point of the
+        overlay.
+      </p>
+      <ul className="evidence" style={{ marginBottom: 12 }}>
+        {rulesFor(template).map((rule) => (
+          <li key={rule.id}>
+            <strong>
+              Floor {rule.floor}
+              {rule.hold ? " · hold" : ""}
+              {rule.neverAutoDismiss ? " · never auto-dismiss" : ""}
+            </strong>
+            <span>{rule.label}</span>
+          </li>
+        ))}
+      </ul>
 
       <button className="btn" type="button" onClick={() => resetCustom(processId)}>
         Reset to defaults

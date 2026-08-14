@@ -12,7 +12,7 @@ const LOOP = [
   {
     n: "2",
     title: "Prioritize",
-    body: "Rank by what the process actually weighs, so the queue opens with the right case on top, not the newest one.",
+    body: "Policy lanes first (a hold is not a ticket), then score inside the lane. Newest is not first.",
   },
   {
     n: "3",
@@ -27,25 +27,32 @@ const LOOP = [
 ];
 
 export default function HomePage() {
-  const { processes, ledger, customizations } = useDesk();
-
-  let totalOpen = 0;
-  let totalDone = 0;
-  let totalP1 = 0;
+  const { processes, ledger, customizations, casesByProcess } = useDesk();
 
   const cards = processes.map((process) => {
     const template = TEMPLATE_MAP[process.templateId];
-    const ranked = rankCases(template.cases, template, customizations[process.id]);
-    const done = ledger.filter((l) => l.processId === process.id).length;
-    const open = ranked.length - done;
-    const p1 = ranked.filter(
-      (r) => r.band === "P1" && !ledger.some((l) => l.processId === process.id && l.caseId === r.item.id)
-    ).length;
-    totalOpen += open;
-    totalDone += done;
-    totalP1 += p1;
-    return { process, template, open, done, p1 };
+    const cases = casesByProcess[process.id] ?? template.cases;
+    const processLedger = ledger.filter((l) => l.processId === process.id);
+    const ranked = rankCases(cases, template, customizations[process.id], processLedger);
+    const done = processLedger.length;
+    const openRows = ranked.filter(
+      (r) => !r.collapsedInto && !processLedger.some((l) => l.caseId === r.item.id)
+    );
+    const open = openRows.length;
+    const p1 = openRows.filter((r) => r.band === "P1").length;
+    const holds = openRows.filter((r) => r.policy.hold).length;
+    return { process, template, open, done, p1, holds };
   });
+
+  const totals = cards.reduce(
+    (acc, card) => ({
+      open: acc.open + card.open,
+      done: acc.done + card.done,
+      p1: acc.p1 + card.p1,
+      holds: acc.holds + card.holds,
+    }),
+    { open: 0, done: 0, p1: 0, holds: 0 }
+  );
 
   return (
     <main className="page">
@@ -75,8 +82,8 @@ export default function HomePage() {
           <span className="op">Right now</span>
           <h3>{processes.length} processes running</h3>
           <p>
-            {totalP1} case{totalP1 === 1 ? "" : "s"} sitting at P1 across every queue.{" "}
-            {totalOpen} open in total, {totalDone} dispositioned so far.
+            {totals.holds} hold{totals.holds === 1 ? "" : "s"} sitting above score.{" "}
+            {totals.p1} P1 across every queue. {totals.open} open, {totals.done} dispositioned.
           </p>
           <span className="meta">
             <span>{TEMPLATES.length} templates available</span>
@@ -93,7 +100,7 @@ export default function HomePage() {
       </div>
 
       <div className="grid-4">
-        {cards.map(({ process, template, open, done, p1 }) => (
+        {cards.map(({ process, template, open, done, p1, holds }) => (
           <Link key={process.id} href={`/p/${process.id}`} className="card">
             <span className="op">{template.operator}</span>
             <h3>{process.name}</h3>
@@ -101,6 +108,7 @@ export default function HomePage() {
             <span className="meta">
               <span>{template.adapter.system}</span>
               <span>
+                {holds > 0 ? `${holds} hold · ` : ""}
                 {p1 > 0 ? `${p1} P1 · ` : ""}
                 {open} open · {done} done
               </span>

@@ -5,6 +5,8 @@ import {
   type AdapterManifest,
 } from "./adapters";
 import { flattenRecord, hasConflictLanguage, relatedEvidence } from "./flatten";
+import { applyPolicyToDisposition, classifyPolicy } from "./policy";
+import { TEMPLATE_MAP } from "./templates";
 import type { CaseItem, DispositionKey, Evidence } from "./types";
 
 function present(raw: Record<string, unknown>, field: string) {
@@ -113,7 +115,18 @@ export function deepen(
       ? 0
       : (manifest.criticalFields.length - gaps.length) / manifest.criticalFields.length;
   const conflict = hasConflictLanguage(facts);
-  const recommendedDisposition = recommendDisposition(item.scores);
+  const template = TEMPLATE_MAP[item.templateId];
+  const policy = template ? classifyPolicy(item, template) : undefined;
+  const recommendedDisposition = applyPolicyToDisposition(
+    recommendDisposition(item.scores),
+    policy ?? {
+      id: "standard",
+      label: "Standard",
+      floor: 50,
+      hold: false,
+      neverAutoDismiss: false,
+    }
+  );
 
   return {
     ...item,
