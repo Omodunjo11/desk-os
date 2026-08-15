@@ -47,13 +47,16 @@ export default function QueueClient({ processId }: { processId: string }) {
     );
   }
 
+  const nowRow = status === "done" ? undefined : (rows.find((r) => r.policy.hold) ?? rows[0]);
+  const nowAsk = nowRow ? packetAsks(nowRow.item)[0] : undefined;
+  const restRows = rows.filter((row) => row.item.id !== nowRow?.item.id);
+
   return (
     <main className="page">
       <div className="queue-head">
         <div>
           <p className="kicker">{template.operator}</p>
           <h1>{process.name}</h1>
-          <p className="lede">{template.promise}</p>
           <p className="adapter">
             {template.adapter.system} · {template.rankingLabel}
           </p>
@@ -68,7 +71,16 @@ export default function QueueClient({ processId }: { processId: string }) {
               <b>{clock.holds}</b> hold{clock.holds === 1 ? "" : "s"} ahead of score
             </span>
             <span>
-              <b>{ranked.filter((row) => !row.collapsedInto && !dispositionFor(row.item.id) && isNeedMore(row.item)).length}</b>{" "}
+              <b>
+                {
+                  ranked.filter((row) => {
+                    if (row.collapsedInto) return false;
+                    const entry = dispositionFor(row.item.id);
+                    const done = Boolean(entry && isClosedDisposition(entry.key));
+                    return !done && (isNeedMore(row.item) || entry?.key === "monitor");
+                  }).length
+                }
+              </b>{" "}
               Need more
             </span>
             <span>
@@ -110,6 +122,29 @@ export default function QueueClient({ processId }: { processId: string }) {
 
       {showCustom && <CustomizePanel processId={processId} template={template} />}
 
+      {nowRow && (
+        <Link
+          href={`/p/${processId}/${encodeURIComponent(nowRow.item.id)}`}
+          className={clsx("now", nowRow.policy.hold && "hold")}
+        >
+          <div className="now-meta">
+            <span className="run-n">01</span>
+            {nowRow.policy.hold ? (
+              <span className="lane hold">Hold</span>
+            ) : (
+              <span className="lane need-more">Now</span>
+            )}
+            <span className={clsx("prio", nowRow.band)}>{nowRow.band}</span>
+            {nowRow.policy.neverAutoDismiss && <span>Cannot auto-clear</span>}
+          </div>
+          <h1>{nowRow.item.title}</h1>
+          <p className="now-why">{nowRow.item.whyFlagged}</p>
+          {nowAsk && <p className="now-ask">Ask · {nowAsk.ask}</p>}
+          <span className="now-go">Open packet</span>
+        </Link>
+      )}
+
+      {(restRows.length > 0 || !nowRow) && (
       <div className="table" role="table" aria-label="Queue">
         <div className="row queue head" role="row">
           <span>Pri</span>
@@ -122,8 +157,8 @@ export default function QueueClient({ processId }: { processId: string }) {
           <span>Sev</span>
           <span>Status</span>
         </div>
-        {rows.length === 0 && <p className="empty">Nothing in this slice of the queue.</p>}
-        {rows.map((row) => {
+        {restRows.length === 0 && <p className="empty">Nothing in this slice of the queue.</p>}
+        {restRows.map((row) => {
           const { item, band: b, severity, policy, similar, floodCount } = row;
           const disp = dispositionFor(item.id);
           const parked = disp?.key === "monitor";
@@ -134,7 +169,7 @@ export default function QueueClient({ processId }: { processId: string }) {
             <Link
               key={item.id}
               href={`/p/${processId}/${encodeURIComponent(item.id)}`}
-              className={clsx("row", "queue", closed && "done")}
+              className={clsx("row", "queue", closed && "done", policy.hold && "hold")}
               role="row"
             >
               <span className={clsx("prio", b)}>{b}</span>
@@ -189,6 +224,7 @@ export default function QueueClient({ processId }: { processId: string }) {
           );
         })}
       </div>
+      )}
       <p className="foot">
         Policy lanes sit above score. A hold cannot fall behind ACH noise. Park with owner stays in the queue.
       </p>

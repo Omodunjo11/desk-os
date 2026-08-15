@@ -28,8 +28,7 @@ const jetbrainsMono = JetBrains_Mono({
 
 export const metadata: Metadata = {
   title: "Desk · Process OS",
-  description:
-    "Plug a high-stakes workflow into existing systems. Rank the backlog. Let the team consume it their way. Add the next process without rebuilding.",
+  description: "Shift board for holds, Need more, and ranked queues. Overlay, not the system of record.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

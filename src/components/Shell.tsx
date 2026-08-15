@@ -25,12 +25,12 @@ export default function Shell({ children }: { children: React.ReactNode }) {
           </svg>
           <span>
             <span className="brand-name">Desk</span>
-            <span className="brand-sub">Process OS · plug in a workflow, keep adding</span>
+            <span className="brand-sub">Process OS</span>
           </span>
         </Link>
         <nav className="nav" aria-label="Primary">
           <Link href="/" className={clsx(on("/") && path === "/" && "on")}>
-            Processes
+            Board
           </Link>
           <Link href="/studio" className={clsx(on("/studio") && "on")}>
             Add process
@@ -48,10 +48,13 @@ export default function Shell({ children }: { children: React.ReactNode }) {
       </header>
       <div className="strip">
         <span>
-          <b>Product</b> = the layer between source systems and how a team consumes work
+          <b>Overlay</b> · not the system of record
         </span>
         <span>
-          <b>Loop</b> = Identify · Prioritize · Act · Learn
+          <b>Holds</b> sit above score
+        </span>
+        <span>
+          <b>Ask Desk</b> is deterministic — no model
         </span>
         <span>
           {workspace ? (
@@ -60,7 +63,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
             </>
           ) : (
             <>
-              <b>Local</b> · share from Workspace when a teammate needs the same queue
+              <b>Local</b>
             </>
           )}
         </span>

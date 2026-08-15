@@ -77,7 +77,7 @@ export default function CaseClient({
               <Link
                 key={row.item.id}
                 href={`/p/${processId}/${encodeURIComponent(row.item.id)}`}
-                className={clsx("rail-item", row.item.id === item.id && "on")}
+                className={clsx("rail-item", row.item.id === item.id && "on", row.policy.hold && "hold")}
               >
                 <span className={clsx("prio", row.band)}>{row.band}</span>
                 <span>
@@ -92,10 +92,11 @@ export default function CaseClient({
         </aside>
 
         <div className="case-main">
-          <div className="hero">
+          <div className={clsx("hero", policy?.hold && "hold", needMore && !policy?.hold && "need-more")}>
             <p className="kicker">{template.operator}</p>
             <h1>{item.title}</h1>
             <p className="lede">{item.subject}</p>
+            {asks[0] && <p className="now-ask case-ask">Ask · {asks[0].ask}</p>}
             {policy && (
               <p className={clsx("lane", policy.hold && "hold", needMore && !policy.hold && "need-more")} style={{ marginTop: 10 }}>
                 {policy.hold ? "Hold" : needMore ? "Need more" : "Lane"} · {policy.label}
