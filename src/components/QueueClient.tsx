@@ -4,29 +4,33 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import clsx from "clsx";
 import CustomizePanel from "@/components/CustomizePanel";
-import { formatField, useProcess } from "@/lib/desk";
+import { formatField, isClosedDisposition, isNeedMore, packetAsks, shiftClock, useProcess } from "@/lib/desk";
 
 type BandFilter = "all" | "P1" | "P2" | "P3";
-type StatusFilter = "open" | "done" | "all";
+type StatusFilter = "open" | "need-more" | "done" | "all";
 
 export default function QueueClient({ processId }: { processId: string }) {
-  const { process, template, ranked, dispositionFor, visibleFields, labels } = useProcess(processId);
+  const { process, template, ranked, dispositionFor, visibleFields, labels, custom, dispositions } =
+    useProcess(processId);
   const [band, setBand] = useState<BandFilter>("all");
   const [status, setStatus] = useState<StatusFilter>("open");
   const [showCustom, setShowCustom] = useState(false);
   const [showCollapsed, setShowCollapsed] = useState(false);
 
-  const open = ranked.filter((row) => !dispositionFor(row.item.id) && !row.collapsedInto);
-  const holds = open.filter((row) => row.policy.hold).length;
-  const p1 = open.filter((row) => row.band === "P1").length;
   const collapsedHidden = ranked.filter((row) => row.collapsedInto).length;
+
+  const clock = shiftClock(ranked, dispositions, custom?.shiftCapacity ?? 40);
 
   const rows = useMemo(() => {
     return ranked.filter((row) => {
       if (!showCollapsed && row.collapsedInto) return false;
       if (band !== "all" && row.band !== band) return false;
-      const done = Boolean(dispositionFor(row.item.id));
+      const entry = dispositionFor(row.item.id);
+      const done = Boolean(entry && isClosedDisposition(entry.key));
+      const parked = entry?.key === "monitor";
+      const needMore = !done && (isNeedMore(row.item) || parked);
       if (status === "open" && done) return false;
+      if (status === "need-more" && !needMore) return false;
       if (status === "done" && !done) return false;
       return true;
     });
@@ -55,15 +59,28 @@ export default function QueueClient({ processId }: { processId: string }) {
           </p>
           <div className="stat-row">
             <span>
-              <b>{open.length}</b> open · shift capacity ~40
+              <b>{clock.open}</b> open · capacity {clock.capacity}
             </span>
             <span>
-              <b>{p1}</b> P1
+              <b>{clock.p1}</b> P1
             </span>
             <span>
-              <b>{holds}</b> hold{holds === 1 ? "" : "s"} ahead of score
+              <b>{clock.holds}</b> hold{clock.holds === 1 ? "" : "s"} ahead of score
+            </span>
+            <span>
+              <b>{ranked.filter((row) => !row.collapsedInto && !dispositionFor(row.item.id) && isNeedMore(row.item)).length}</b>{" "}
+              Need more
+            </span>
+            <span>
+              <b>{clock.minutesNeeded}m</b> to work · {clock.minutesAvailable}m in the shift
             </span>
           </div>
+          {!clock.willFinish && (
+            <p className="divergence">
+              You will not finish this queue today ({clock.overflow} over capacity). Holds still
+              must: {clock.mustHolds.map((row) => row.item.title).join(" · ") || "none"}.
+            </p>
+          )}
         </div>
         <div style={{ display: "grid", gap: 8, justifyItems: "end" }}>
           <div className="filter-seg" aria-label="Priority">
@@ -74,9 +91,9 @@ export default function QueueClient({ processId }: { processId: string }) {
             ))}
           </div>
           <div className="filter-seg" aria-label="Status">
-            {(["open", "done", "all"] as const).map((id) => (
+            {(["open", "need-more", "done", "all"] as const).map((id) => (
               <button key={id} type="button" className={clsx(status === id && "on")} onClick={() => setStatus(id)}>
-                {id === "open" ? "Open" : id === "done" ? "Done" : "All"}
+                {id === "open" ? "Open" : id === "need-more" ? "Need more" : id === "done" ? "Done" : "All"}
               </button>
             ))}
           </div>
@@ -109,24 +126,39 @@ export default function QueueClient({ processId }: { processId: string }) {
         {rows.map((row) => {
           const { item, band: b, severity, policy, similar, floodCount } = row;
           const disp = dispositionFor(item.id);
+          const parked = disp?.key === "monitor";
+          const closed = Boolean(disp && isClosedDisposition(disp.key));
+          const needMore = !closed && (isNeedMore(item) || parked);
+          const asks = needMore ? packetAsks(item) : [];
           return (
             <Link
               key={item.id}
               href={`/p/${processId}/${encodeURIComponent(item.id)}`}
-              className={clsx("row", "queue", disp && "done")}
+              className={clsx("row", "queue", closed && "done")}
               role="row"
             >
               <span className={clsx("prio", b)}>{b}</span>
-              <span className={clsx("lane", policy.hold && "hold")}>
-                {policy.hold ? "Hold" : policy.label}
+              <span className={clsx("lane", policy.hold && "hold", needMore && !policy.hold && "need-more")}>
+                {policy.hold ? "Hold" : needMore ? "Need more" : policy.label}
               </span>
               <span className="title-cell">
                 <b>{item.title}</b>
                 <i>{item.subject}</i>
+                {parked && (
+                  <i>
+                    Parked with {disp?.owner ?? "no owner"} · still in the queue
+                  </i>
+                )}
                 {floodCount > 1 && !row.collapsedInto && (
                   <i>
                     {floodCount} tags on this asset collapsed — ISA-18.2 flood, not {floodCount}{" "}
                     cases.
+                  </i>
+                )}
+                {asks.length > 0 && (
+                  <i>
+                    Ask: {asks[0].ask}
+                    {asks.length > 1 ? ` · +${asks.length - 1}` : ""}
                   </i>
                 )}
                 {similar.dismissed > 0 && (
@@ -144,16 +176,21 @@ export default function QueueClient({ processId }: { processId: string }) {
                 </span>
               ))}
               <span className={clsx("sev", severity)}>{severity}</span>
-              <span className={clsx("disp-pill", disp?.key ?? "open")}>
-                {disp ? labels(disp.key) : "Open"}
+              <span className={clsx("disp-pill", disp?.key ?? (needMore ? "need-more" : "open"))}>
+                {closed
+                  ? labels(disp!.key)
+                  : parked
+                    ? `${labels("monitor")}${disp?.owner ? ` · ${disp.owner}` : ""}`
+                    : needMore
+                      ? "Need more"
+                      : "Open"}
               </span>
             </Link>
           );
         })}
       </div>
       <p className="foot">
-        Policy lanes sit above score. A hold cannot fall behind ACH noise. Priority is look-now.
-        Severity is harm if true.
+        Policy lanes sit above score. A hold cannot fall behind ACH noise. Park with owner stays in the queue.
       </p>
     </main>
   );

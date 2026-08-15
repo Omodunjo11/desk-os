@@ -156,12 +156,54 @@ function matchRule(item: CaseItem, match: PolicyMatch): boolean {
   return clauses.some(Boolean);
 }
 
-export function rulesFor(template: ProcessTemplate): PolicyRule[] {
-  return template.policyRules ?? POLICY_BY_TEMPLATE[template.id] ?? [];
+export function lockedRuleIds(template: ProcessTemplate): string[] {
+  return (POLICY_BY_TEMPLATE[template.id] ?? [])
+    .filter((rule) => rule.neverAutoDismiss)
+    .map((rule) => rule.id);
 }
 
-export function classifyPolicy(item: CaseItem, template: ProcessTemplate): PolicyHit {
-  const hits = rulesFor(template)
+export function isLockedRule(ruleId: string, template: ProcessTemplate) {
+  return lockedRuleIds(template).includes(ruleId);
+}
+
+/**
+ * Custom lanes can be added and reordered.
+ * System holds keep their matcher, hold flag, never-auto-dismiss, and floor.
+ */
+export function mergePolicyRules(
+  template: ProcessTemplate,
+  custom?: { policyRules?: PolicyRule[] }
+): PolicyRule[] {
+  const system = template.policyRules ?? POLICY_BY_TEMPLATE[template.id] ?? [];
+  const locked = new Set(lockedRuleIds(template));
+  if (!custom?.policyRules?.length) return system;
+
+  const overlay = new Map(custom.policyRules.map((rule) => [rule.id, rule]));
+  const merged = system.map((sys) => {
+    const next = overlay.get(sys.id);
+    if (!next) return sys;
+    if (locked.has(sys.id)) {
+      return { ...sys, label: next.label.trim() || sys.label };
+    }
+    return next;
+  });
+  const extras = custom.policyRules.filter((rule) => !system.some((sys) => sys.id === rule.id));
+  return [...merged, ...extras].sort((a, b) => a.floor - b.floor || a.label.localeCompare(b.label));
+}
+
+export function rulesFor(
+  template: ProcessTemplate,
+  custom?: { policyRules?: PolicyRule[] }
+): PolicyRule[] {
+  return mergePolicyRules(template, custom);
+}
+
+export function classifyPolicy(
+  item: CaseItem,
+  template: ProcessTemplate,
+  custom?: { policyRules?: PolicyRule[] }
+): PolicyHit {
+  const hits = rulesFor(template, custom)
     .filter((rule) => matchRule(item, rule.match))
     .sort((a, b) => a.floor - b.floor);
   const hit = hits[0];
@@ -194,6 +236,20 @@ export function noteRequiredFor(
 ) {
   if (key !== "dismiss") return false;
   return policy.hold || policy.neverAutoDismiss || band === "P1";
+}
+
+/** Act and dismiss leave the open queue. Need more / park stays in it. */
+export function isClosedDisposition(key: DispositionKey) {
+  return key !== "monitor";
+}
+
+export function assertPark(key: DispositionKey, owner: string) {
+  if (key !== "monitor") return { ok: true as const };
+  if (owner.trim().length > 0) return { ok: true as const };
+  return {
+    ok: false as const,
+    reason: "Park with owner needs a name. Need more stays in the queue.",
+  };
 }
 
 export function assertDisposition(

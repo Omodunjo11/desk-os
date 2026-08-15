@@ -4,8 +4,8 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import clsx from "clsx";
-import { formatScore, noteRequiredFor, stageWriteback, useProcess } from "@/lib/desk";
-import type { DispositionKey } from "@/lib/desk";
+import { formatScore, isNeedMore, noteRequiredFor, packetAsks, stageWriteback, useProcess } from "@/lib/desk";
+import type { DispositionKey, PacketNode } from "@/lib/desk";
 
 export default function CaseClient({
   processId,
@@ -27,6 +27,7 @@ export default function CaseClient({
   const item = cases.find((c) => c.id === caseId) ?? ranked.find((r) => r.item.id === caseId)?.item;
   const rankedRow = ranked.find((r) => r.item.id === caseId);
   const [note, setNote] = useState("");
+  const [owner, setOwner] = useState("");
   const [blockReason, setBlockReason] = useState<string | null>(null);
 
   if (!process || !template || !item) {
@@ -47,14 +48,17 @@ export default function CaseClient({
     rankedRow &&
     ((rankedRow.band === "P1" && rankedRow.severity === "low") ||
       (rankedRow.band === "P3" && (rankedRow.severity === "critical" || rankedRow.severity === "high")));
+  const asks = packetAsks(item);
+  const needMore = isNeedMore(item);
 
-  const act = (key: DispositionKey) => {
-    const result = store.dispose(processId, item.id, key, note);
+  const act = async (key: DispositionKey) => {
+    const result = store.dispose(processId, item.id, key, note, owner);
     if (!result.ok) {
       setBlockReason(result.reason);
       return;
     }
     setBlockReason(null);
+    await store.publishWriteback(result.entry);
     router.push(`/p/${processId}`);
   };
 
@@ -79,7 +83,7 @@ export default function CaseClient({
                 <span>
                   <b>{row.item.title}</b>
                   <i>
-                    {row.policy.hold ? "Hold · " : ""}
+                    {row.policy.hold ? "Hold · " : isNeedMore(row.item) ? "Need more · " : ""}
                     {row.item.subject}
                   </i>
                 </span>
@@ -93,8 +97,8 @@ export default function CaseClient({
             <h1>{item.title}</h1>
             <p className="lede">{item.subject}</p>
             {policy && (
-              <p className={clsx("lane", policy.hold && "hold")} style={{ marginTop: 10 }}>
-                {policy.hold ? "Hold" : "Lane"} · {policy.label}
+              <p className={clsx("lane", policy.hold && "hold", needMore && !policy.hold && "need-more")} style={{ marginTop: 10 }}>
+                {policy.hold ? "Hold" : needMore ? "Need more" : "Lane"} · {policy.label}
                 {policy.neverAutoDismiss ? " · cannot auto-clear" : ""}
               </p>
             )}
@@ -108,12 +112,18 @@ export default function CaseClient({
                 <b>{rankedRow?.severity ?? "—"}</b>
               </div>
               <div>
-                <span>Coverage</span>
-                <b>{item.intakeCoverage !== undefined ? formatScore(item.intakeCoverage) : "seed"}</b>
+                <span>Packet</span>
+                <b>
+                  {item.intakeCoverage !== undefined
+                    ? formatScore(item.intakeCoverage)
+                    : needMore
+                      ? "Need more"
+                      : "Ready"}
+                </b>
               </div>
               <div>
                 <span>Suggested</span>
-                <b>{item.recommendedDisposition ? labels(item.recommendedDisposition) : "—"}</b>
+                <b>{item.recommendedDisposition ? labels(item.recommendedDisposition) : needMore ? labels("monitor") : "—"}</b>
               </div>
             </div>
             {policy?.hold && (
@@ -140,9 +150,29 @@ export default function CaseClient({
                   </li>
                 ))}
               </ul>
-              {item.gaps && item.gaps.length > 0 && (
-                <div className="warn">
-                  Missing for a full decision: {item.gaps.join(", ")}
+              {asks.length > 0 && (
+                <div className="asks">
+                  <h2>Need more</h2>
+                  <p className="foot">
+                    Ask the source system to fill this. Desk does not become the record.
+                  </p>
+                  <ul>
+                    {asks.map((row) => (
+                      <li key={row.id}>
+                        <span className={clsx("ask-tag", row.source)}>
+                          {row.source === "missing-field" ? "Missing" : "Ask"}
+                        </span>
+                        {row.ask}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {item.packet && (
+                <div className="packet">
+                  <h2>Packet</h2>
+                  <p className="foot">Relationships from the source export. Overlay only.</p>
+                  <PacketTree node={item.packet} />
                 </div>
               )}
               {rankedRow && rankedRow.similar.dismissed > 0 && (
@@ -158,16 +188,37 @@ export default function CaseClient({
                 <b>Recommended.</b> {item.recommendedAction}
               </div>
               <div className="warn">{item.uncertainty}</div>
-              <p className="foot">Current: {current ? labels(current.key) : "Open"}</p>
+              <p className="foot">
+                Current:{" "}
+                {current
+                  ? `${labels(current.key)}${current.owner ? ` · ${current.owner}` : ""}`
+                  : needMore
+                    ? "Need more · open"
+                    : "Open"}
+              </p>
               {preview && (
                 <p className="writeback">
-                  Overlay only. Would label {preview.destination}{" "}
+                  Overlay only. Will POST a label to the write-back URL, never a funds release.{" "}
+                  {preview.destination}{" "}
                   <code>
                     {preview.field}={preview.value}
                   </code>{" "}
-                  on {preview.sourceRecordId}. Desk is not the system of record.
+                  on {preview.sourceRecordId}
+                  {preview.asks?.length ? ` · ${preview.asks.length} ask${preview.asks.length === 1 ? "" : "s"}` : ""}.
+                  Desk is not the system of record.
                 </p>
               )}
+              <input
+                type="text"
+                className="note owner-field"
+                placeholder="Owner (required to park / Need more)"
+                value={owner}
+                onChange={(e) => {
+                  setOwner(e.target.value);
+                  if (blockReason) setBlockReason(null);
+                }}
+                aria-label="Owner"
+              />
               <textarea
                 className="note"
                 placeholder={
@@ -200,5 +251,19 @@ export default function CaseClient({
         </div>
       </div>
     </div>
+  );
+}
+
+function PacketTree({ node }: { node: PacketNode }) {
+  return (
+    <ul className="tree">
+      <li>
+        <strong>{node.kind}</strong> {node.label}
+        {node.status ? ` · ${node.status}` : ""}
+        {node.children?.map((child) => (
+          <PacketTree key={child.id + child.label} node={child} />
+        ))}
+      </li>
+    </ul>
   );
 }

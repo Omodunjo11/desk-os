@@ -3,6 +3,7 @@
 export type {
   Adapter,
   CaseItem,
+  ConnectorConfig,
   DeskId,
   DispositionDef,
   DispositionKey,
@@ -11,6 +12,7 @@ export type {
   Fact,
   FieldDef,
   LoggedDisposition,
+  PacketNode,
   PolicyHit,
   PolicyRule,
   PriorityBand,
@@ -19,6 +21,8 @@ export type {
   ProcessTemplate,
   RankingInput,
   Severity,
+  WorkspaceMeta,
+  WorkspaceSnapshot,
   WritebackPayload,
 } from "./types";
 
@@ -39,12 +43,26 @@ export {
   applyPolicyToDisposition,
   assertDisposition,
   classifyPolicy,
+  isLockedRule,
+  lockedRuleIds,
+  mergePolicyRules,
   noteRequiredFor,
   rulesFor,
+  isClosedDisposition,
+  assertPark,
 } from "./policy";
-export { stageWriteback } from "./writeback";
-export { fingerprint, learnFactor, similarOutcomes } from "./learn";
+export { postWriteback, stageWriteback } from "./writeback";
+export { asksAreOperatorLanguage, isNeedMore, packetAsks } from "./gaps";
+export type { PacketAsk } from "./gaps";
+export { answerChat, routeIntent } from "./chat";
+export type { ChatIntent, ChatReply, ChatWorld } from "./chat";
+export { fingerprint, fingerprintLabel, formatOverridePack, learnFactor, overrideReview, sampleWeekPlan, similarOutcomes } from "./learn";
+export type { OverrideAdvice, OverrideBucket } from "./learn";
 export { formatAudit } from "./audit";
+export { packetFromRaw } from "./packet";
+export { DEFAULT_SHIFT_CAPACITY, MINUTES_PER_CASE, shiftClock } from "./shift";
+export type { ShiftClock } from "./shift";
+export { DEMO_FEEDS, isSafePullUrl, pullToCases } from "./connectors";
 export {
   ADAPTERS,
   ADAPTER_MAP,

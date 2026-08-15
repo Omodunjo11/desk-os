@@ -15,6 +15,7 @@ export function formatAudit(
         process: names[row.processId] ?? row.processId,
         caseId: row.caseId,
         action: row.key,
+        owner: row.owner ?? null,
         note: row.note || null,
         policy: row.policyLabel ?? null,
         writeback: row.writeback

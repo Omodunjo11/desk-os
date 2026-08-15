@@ -1,4 +1,5 @@
 import { ADAPTERS, type AdapterManifest } from "./adapters";
+import { packetAsks } from "./gaps";
 import type { CaseItem, DispositionKey, WritebackPayload } from "./types";
 
 export type WritebackSpec = {
@@ -76,14 +77,53 @@ export function stageWriteback(
   const manifest = manifestFor(item);
   const spec = manifest ? WRITEBACK[manifest.id] : undefined;
   if (!spec) return undefined;
+  const asks = key === "monitor" ? packetAsks(item).map((row) => row.ask) : [];
+  const askNote = asks.length ? `Need more: ${asks.join("; ")}` : "";
   return {
     destination: spec.destination,
     sourceRecordId: sourceId(item),
     field: spec.statusField,
     value: spec.status[key],
-    note: note.trim(),
+    note: [note.trim(), askNote].filter(Boolean).join(" — "),
     overlayOnly: spec.overlayOnly,
     learns: spec.learns,
     status: "staged",
+    kind: "label",
+    asks: asks.length ? asks : undefined,
   };
+}
+
+export async function postWriteback(
+  payload: WritebackPayload,
+  url: string
+): Promise<WritebackPayload> {
+  if (payload.kind !== "label") {
+    return { ...payload, status: "failed", error: "Refused: Desk only posts labels, never money movement." };
+  }
+  try {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        kind: "label",
+        destination: payload.destination,
+        sourceRecordId: payload.sourceRecordId,
+        field: payload.field,
+        value: payload.value,
+        note: payload.note,
+        overlayOnly: true,
+        asks: payload.asks ?? [],
+      }),
+    });
+    if (!res.ok) {
+      return { ...payload, status: "failed", error: `Write-back ${res.status}` };
+    }
+    return { ...payload, status: "posted", postedAt: new Date().toISOString(), overlayOnly: true };
+  } catch (err) {
+    return {
+      ...payload,
+      status: "failed",
+      error: err instanceof Error ? err.message : "Write-back failed",
+    };
+  }
 }

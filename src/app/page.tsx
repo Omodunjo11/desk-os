@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useDesk, TEMPLATE_MAP, TEMPLATES, ADAPTERS, rankCases } from "@/lib/desk";
+import { useDesk, TEMPLATE_MAP, TEMPLATES, ADAPTERS, rankCases, isClosedDisposition, isNeedMore } from "@/lib/desk";
 
 const LOOP = [
   {
@@ -17,12 +17,12 @@ const LOOP = [
   {
     n: "3",
     title: "Act",
-    body: "Three plain actions per case, named however the team names them. Every action leaves a record.",
+    body: "Three plain actions. Need more is a packet of asks for the source system, not a stall.",
   },
   {
     n: "4",
     title: "Learn",
-    body: "Dispositions land in the ledger. Reopen anything, watch the pattern, retune the weights.",
+    body: "Labels group by typology for the weekly override review. Noise can retune a rule. Holds cannot.",
   },
 ];
 
@@ -34,14 +34,17 @@ export default function HomePage() {
     const cases = casesByProcess[process.id] ?? template.cases;
     const processLedger = ledger.filter((l) => l.processId === process.id);
     const ranked = rankCases(cases, template, customizations[process.id], processLedger);
-    const done = processLedger.length;
+    const closed = processLedger.filter((l) => isClosedDisposition(l.key));
+    const parked = processLedger.filter((l) => l.key === "monitor");
+    const done = closed.length;
     const openRows = ranked.filter(
-      (r) => !r.collapsedInto && !processLedger.some((l) => l.caseId === r.item.id)
+      (r) => !r.collapsedInto && !closed.some((l) => l.caseId === r.item.id)
     );
     const open = openRows.length;
     const p1 = openRows.filter((r) => r.band === "P1").length;
     const holds = openRows.filter((r) => r.policy.hold).length;
-    return { process, template, open, done, p1, holds };
+    const needMore = openRows.filter((r) => isNeedMore(r.item) || parked.some((l) => l.caseId === r.item.id)).length;
+    return { process, template, open, done, p1, holds, needMore };
   });
 
   const totals = cards.reduce(
@@ -50,8 +53,9 @@ export default function HomePage() {
       done: acc.done + card.done,
       p1: acc.p1 + card.p1,
       holds: acc.holds + card.holds,
+      needMore: acc.needMore + card.needMore,
     }),
-    { open: 0, done: 0, p1: 0, holds: 0 }
+    { open: 0, done: 0, p1: 0, holds: 0, needMore: 0 }
   );
 
   return (
@@ -77,13 +81,14 @@ export default function HomePage() {
               </li>
             ))}
           </ol>
+          <p className="loop-back">↻ Then back to Identify. The next case restarts the cycle.</p>
         </div>
-        <div className="card" style={{ cursor: "default" }}>
+        <div className="card stat">
           <span className="op">Right now</span>
           <h3>{processes.length} processes running</h3>
           <p>
             {totals.holds} hold{totals.holds === 1 ? "" : "s"} sitting above score.{" "}
-            {totals.p1} P1 across every queue. {totals.open} open, {totals.done} dispositioned.
+            {totals.needMore} Need more. {totals.p1} P1. {totals.open} open, {totals.done} closed.
           </p>
           <span className="meta">
             <span>{TEMPLATES.length} templates available</span>
@@ -94,13 +99,18 @@ export default function HomePage() {
 
       <div className="section-head">
         <h2>Processes</h2>
-        <Link href="/studio" className="btn primary">
-          Add process
-        </Link>
+        <div style={{ display: "flex", gap: 8 }}>
+          <Link href="/learn" className="btn">
+            Weekly review
+          </Link>
+          <Link href="/studio" className="btn primary">
+            Add process
+          </Link>
+        </div>
       </div>
 
       <div className="grid-4">
-        {cards.map(({ process, template, open, done, p1, holds }) => (
+        {cards.map(({ process, template, open, done, p1, holds, needMore }) => (
           <Link key={process.id} href={`/p/${process.id}`} className="card">
             <span className="op">{template.operator}</span>
             <h3>{process.name}</h3>
@@ -109,8 +119,9 @@ export default function HomePage() {
               <span>{template.adapter.system}</span>
               <span>
                 {holds > 0 ? `${holds} hold · ` : ""}
+                {needMore > 0 ? `${needMore} Need more · ` : ""}
                 {p1 > 0 ? `${p1} P1 · ` : ""}
-                {open} open · {done} done
+                {open} open · {done} closed
               </span>
             </span>
           </Link>

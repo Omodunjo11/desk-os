@@ -64,6 +64,8 @@ export type PolicyHit = {
   neverAutoDismiss: boolean;
 };
 
+export type WritebackStatus = "staged" | "posted" | "failed";
+
 export type WritebackPayload = {
   destination: string;
   sourceRecordId: string;
@@ -72,7 +74,34 @@ export type WritebackPayload = {
   note: string;
   overlayOnly: boolean;
   learns: boolean;
-  status: "staged";
+  status: WritebackStatus;
+  /** Labels only. Never a funds-release or safety-clear command. */
+  kind: "label";
+  /** Operator-language asks when the label is Need more. Not source field keys. */
+  asks?: string[];
+  postedAt?: string;
+  error?: string;
+};
+
+export type PacketNode = {
+  kind: string;
+  id: string;
+  label: string;
+  status?: string;
+  children?: PacketNode[];
+};
+
+export type ConnectorConfig = {
+  adapterId: string;
+  url: string;
+  lastPulledAt?: string;
+  lastError?: string;
+};
+
+export type WorkspaceMeta = {
+  id: string;
+  key: string;
+  name: string;
 };
 
 export type Evidence = {
@@ -105,6 +134,8 @@ export type CaseItem = {
   intakeCoverage?: number;
   /** What the intake layer would do. Analyst can override. */
   recommendedDisposition?: DispositionKey;
+  /** Issue → control → test → asset (or txn/lot siblings). Overlay, not GRC. */
+  packet?: PacketNode;
 };
 
 export type ProcessTemplate = {
@@ -127,6 +158,11 @@ export type ProcessCustomization = {
   hiddenFields: string[];
   weights: Record<string, number>;
   dispositionLabels: Record<DispositionKey, string>;
+  policyRules?: PolicyRule[];
+  connector?: ConnectorConfig;
+  writebackUrl?: string;
+  writebackEnabled?: boolean;
+  shiftCapacity?: number;
 };
 
 export type ProcessInstance = {
@@ -135,6 +171,13 @@ export type ProcessInstance = {
   name: string;
   operator: string;
   createdAt: string;
+};
+
+export type WorkspaceSnapshot = {
+  processes: ProcessInstance[];
+  customizations: Record<string, ProcessCustomization>;
+  ledger: LoggedDisposition[];
+  casesByProcess: Record<string, CaseItem[]>;
 };
 
 export type LoggedDisposition = {
@@ -146,6 +189,8 @@ export type LoggedDisposition = {
   policyId?: string;
   policyLabel?: string;
   writeback?: WritebackPayload;
+  /** Who still owns a parked / Need more case. Overlay only. */
+  owner?: string;
 };
 
 export type DisposeResult =

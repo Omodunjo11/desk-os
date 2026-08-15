@@ -231,6 +231,26 @@ export const GOLD: GoldCase[] = [
     },
   },
   {
+    id: "fraud-thin-packet",
+    adapterId: "tm-alerts",
+    raw: {
+      alertId: "A-thin-1",
+      alertType: "ELDER_EXPLOITATION",
+      policyName: "Elder account — new payees",
+      focalParty: "Helen Ward, 78",
+      narrative: "New bill-pay payees. The export omitted the next step and the open question.",
+      txnAmountUsd: 14200,
+      alertAgeHours: 5,
+      channel: "Bill pay",
+      ruleId: "New payee + age",
+      riskScore: 90,
+    },
+    expect: {
+      disposition: "monitor",
+      titleIncludes: "Elder",
+    },
+  },
+  {
     id: "openpages-missing-required",
     adapterId: "openpages",
     raw: { comment: "a feed ping with no issue body" },

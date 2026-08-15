@@ -7,6 +7,7 @@ import {
 import { flattenRecord, hasConflictLanguage, relatedEvidence } from "./flatten";
 import { applyPolicyToDisposition, classifyPolicy } from "./policy";
 import { TEMPLATE_MAP } from "./templates";
+import { packetFromRaw } from "./packet";
 import type { CaseItem, DispositionKey, Evidence } from "./types";
 
 function present(raw: Record<string, unknown>, field: string) {
@@ -138,5 +139,6 @@ export function deepen(
     recommendedAction: actionFor(recommendedDisposition, item.recommendedAction),
     uncertainty: uncertaintyFor(item, gaps, conflict),
     evidence: mergeEvidence(item.evidence, relatedEvidence(raw)),
+    packet: packetFromRaw(raw, item.templateId),
   };
 }

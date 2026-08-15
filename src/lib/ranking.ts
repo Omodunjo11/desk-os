@@ -118,7 +118,7 @@ export function rankCases(
       score,
       band: band(score),
       severity: severityOf(item),
-      policy: classifyPolicy(item, template),
+      policy: classifyPolicy(item, template, custom),
       similar,
       floodCount: 0,
     };
